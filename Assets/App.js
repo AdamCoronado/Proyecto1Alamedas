@@ -15,7 +15,7 @@ function escapeHTML(str){
   // Intentar cargar la base de datos binaria
   let db;
   try {
-    const res = await fetch('C:\Users\SuperUsuario\Desktop\UMG\OCTAVO SEMESTRE\DESARROLLO WEB\Proyecto1\alamedas.db');
+    const res = await fetch('Data\alamedas.sqlite');
     if (!res.ok) throw new Error('DB no encontrada');
     const buf = await res.arrayBuffer();
     db = new SQL.Database(new Uint8Array(buf));
@@ -38,3 +38,4 @@ function escapeHTML(str){
   SQLApp.ready = true;
   window.dispatchEvent(new Event('db-ready'));
 })();
+
