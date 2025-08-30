@@ -1,0 +1,129 @@
+:root {
+    --bg: #0f172a;
+    --bg2: #111827;
+    --card: #0b1224;
+    --text: #e5e7eb;
+    --muted: #9ca3af;
+    --border: rgba(255,255,255,.12);
+}
+
+* {
+    box-sizing: border-box
+}
+
+html, body {
+    margin: 0;
+    padding: 0
+}
+
+body {
+    font-family: system-ui,-apple-system,"Segoe UI",Roboto,Inter,Arial,sans-serif;
+    background: linear-gradient(180deg,var(--bg),var(--bg2));
+    color: var(--text);
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 16px
+}
+
+.site-header {
+    position: sticky;
+    top: 0;
+    background: rgba(17,24,39,.7);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid var(--border)
+}
+
+    .site-header .container {
+        display: flex;
+        align-items: center;
+        justify-content: space-between
+    }
+
+.nav a {
+    color: var(--text);
+    text-decoration: none;
+    margin: 0 8px;
+    padding: 8px 10px;
+    border-radius: 10px
+}
+
+    .nav a[aria-current="page"], .nav a:hover {
+        background: rgba(255,255,255,.08)
+    }
+
+h1, h2, h3 {
+    margin: 0 0 8px
+}
+
+.muted {
+    color: var(--muted)
+}
+
+.card {
+    background: linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02));
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    margin: 12px 0;
+}
+
+.grid {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(auto-fit,minmax(280px,1fr))
+}
+
+.cols {
+    columns: 2;
+    column-gap: 24px;
+    padding-left: 16px
+}
+
+    .cols li {
+        break-inside: avoid;
+        margin-bottom: 6px
+    }
+
+.gallery {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    align-items: start;
+}
+
+    .gallery img {
+        width: 100%;
+        height: auto;
+        display: block;
+        border-radius: 10px;
+    }
+
+.cards {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(auto-fit,minmax(260px,1fr))
+}
+
+.site-footer {
+    border-top: 1px solid var(--border);
+    background: rgba(17,24,39,.6);
+    margin-top: 24px
+}
+
+.responsive-16by9 {
+    position: relative;
+    width: 100%;
+    padding-top: 56.25%
+}
+
+    .responsive-16by9 iframe {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        border: 0
+    }
