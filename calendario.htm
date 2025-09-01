@@ -89,7 +89,7 @@
         `<option value="${idx+1}" ${idx+1===m?'selected':''}>${nom}</option>`
       ).join('');
 
-      // Años: rango razonable (hoy-1 .. hoy+1).
+      // Anios: rango razonable (hoy-1 .. hoy+1).
       const years = [y-1, y, y+1];
       selAnio.innerHTML = years.map(yy =>
         `<option value="${yy}" ${yy===y?'selected':''}>${yy}</option>`
