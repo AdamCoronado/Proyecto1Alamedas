@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head> 
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Calendario — Alamedas</title>
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <h1>Calendario de Actividades</h1>
+      <nav class="nav">
+        <a href="index.html">Inicio</a>
+        <a href="calendario.html" aria-current="page">Calendario</a>
+        <a href="consulta.html">Consulta de cuotas</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Controles de mes / año -->
+    <section class="card">
+      <form id="filtros" class="calendar-controls" onsubmit="return false;">
+        <label>
+          Mes
+          <select id="mes"></select>
+        </label>
+        <label>
+          Año
+          <select id="anio"></select>
+        </label>
+        <button class="btn" id="btnAplicar" type="button">Mostrar</button>
+      </form>
+    </section>
+
+    <!-- Calendario y Detalle -->
+    <section class="grid">
+      <article class="card">
+        <div class="calendar">
+          <div class="calendar-header">
+            <div>Dom</div><div>Lun</div><div>Mar</div><div>Mié</div><div>Jue</div><div>Vie</div><div>Sáb</div>
+          </div>
+          <div id="calendar-grid" class="calendar-grid" aria-live="polite"></div>
+        </div>
+      </article>
+
+      <aside class="card" id="panel-detalle">
+        <h2>Detalle del evento</h2>
+        <div id="detalle">
+          <p class="muted">Selecciona un título en el calendario para ver la descripción/nota.</p>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container"><small>© 2025 Alamedas de Santa Ana</small></div>
+  </footer>
+
+  <!-- Conexion SQLite y App.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/sql-wasm.js" defer></script>
+  <script src="assets/app.js" defer></script>
+
+  <script defer>
+    // --- Utilidades de fechas ---
+    const NOMBRES_MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+    function pad2(n){ return n.toString().padStart(2,'0'); }
+    function daysInMonth(year, month) { // month: 1..12
+      return new Date(year, month, 0).getDate();
+    }
+
+    // --- Estado ---
+    let eventosMes = []; // {fecha:'YYYY-MM-DD', titulo, descripcion}
+    const grid = document.getElementById('calendar-grid');
+    const detalle = document.getElementById('detalle');
+
+    // --- Poblar selects de mes/año ---
+    function initSelects(){
+      const selMes = document.getElementById('mes');
+      const selAnio = document.getElementById('anio');
+      const hoy = new Date();
+      const y = hoy.getFullYear();
+      const m = hoy.getMonth()+1;
+
+      // Meses
+      selMes.innerHTML = NOMBRES_MESES.map((nom, idx) =>
+        `<option value="${idx+1}" ${idx+1===m?'selected':''}>${nom}</option>`
+      ).join('');
+
+      // Años: rango razonable (hoy-1 .. hoy+1).
+      const years = [y-1, y, y+1];
+      selAnio.innerHTML = years.map(yy =>
+        `<option value="${yy}" ${yy===y?'selected':''}>${yy}</option>`
+      ).join('');
+    }
+
+    // --- Dibujar calendario ---
+    function renderCalendar(year, month){
+      // Reset detalle
+      detalle.innerHTML = '<p class="muted">Selecciona un título en el calendario para ver la descripción/nota.</p>';
+
+      grid.innerHTML = ''; // limpiar
+      const primerDia = new Date(year, month-1, 1);
+      const offset = primerDia.getDay(); // 0=Dom ... 6=Sáb
+      const total = daysInMonth(year, month);
+
+      // espacios vacíos antes del 1
+      for (let i=0; i<offset; i++){
+        grid.insertAdjacentHTML('beforeend', `<div class="day empty" aria-hidden="true"></div>`);
+      }
+
+      // días del mes
+      for (let d=1; d<=total; d++){
+        const fechaStr = `${year}-${pad2(month)}-${pad2(d)}`;
+        const eventosDia = eventosMes.filter(e => e.fecha === fechaStr);
+
+        grid.insertAdjacentHTML('beforeend', `
+          <div class="day">
+            <div class="date-label">${d}</div>
+            <ul class="events">
+              ${eventosDia.map((e,idx)=>`
+                <li>
+                  <button class="event-link" data-fecha="${e.fecha}" data-idx="${idx}" title="${escapeHTML(e.titulo)}">
+                    ${escapeHTML(e.titulo)}
+                  </button>
+                </li>
+              `).join('')}
+            </ul>
+          </div>
+        `);
+      }
+    }
+
+    // --- Consultar eventos del mes en SQLite ---
+    function cargarEventosMes(year, month){
+      // Usamos strftime para filtrar por año/mes exacto
+      const rows = SQLApp.query(`
+        SELECT Fecha, Titulo, IFNULL(Descripcion,'') AS Descripcion
+        FROM Calendario
+        WHERE strftime('%Y', Fecha) = ? AND strftime('%m', Fecha) = ?
+        ORDER BY date(Fecha) ASC, Titulo ASC
+      `, [String(year), pad2(month)]);
+
+      eventosMes = rows.map(r => ({
+        fecha: r.Fecha,
+        titulo: r.Titulo,
+        descripcion: r.Descripcion
+      }));
+    }
+
+    //Manejar clic en título para mostrar detalle
+    grid.addEventListener('click', (ev)=>{
+      const btn = ev.target.closest('.event-link');
+      if(!btn) return;
+      const fecha = btn.dataset.fecha;
+      const idx = Number(btn.dataset.idx);
+      // Buscar el evento exacto por fecha + título mostrado
+      const titulo = btn.textContent.trim();
+      const evSel = eventosMes.find(e => e.fecha===fecha && e.titulo===titulo);
+      if(!evSel){
+        detalle.innerHTML = '<p class="muted">No se encontró el detalle del evento.</p>';
+        return;
+      }
+      const f = new Date(fecha+'T00:00:00');
+      const human = `${pad2(f.getDate())}-${pad2(f.getMonth()+1)}-${f.getFullYear()}`;
+      detalle.innerHTML = `
+        <h3>${escapeHTML(evSel.titulo)}</h3>
+        <p><small class="muted">Fecha: ${human}</small></p>
+        <p>${escapeHTML(evSel.descripcion || 'Sin descripción')}</p>
+      `;
+    });
+
+    // --- Inicializar cuando DB esté lista ---
+    window.addEventListener('db-ready', () => {
+      initSelects();
+      const selMes = document.getElementById('mes');
+      const selAnio = document.getElementById('anio');
+      const aplicar = document.getElementById('btnAplicar');
+
+      function actualizar(){
+        const y = Number(selAnio.value);
+        const m = Number(selMes.value);
+        cargarEventosMes(y, m);
+        renderCalendar(y, m);
+      }
+
+      aplicar.addEventListener('click', actualizar);
+      // Render inicial con el mes actual
+      actualizar();
+    });
+  </script>
+</body>
+</html>
