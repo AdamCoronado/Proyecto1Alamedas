@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Consulta de Inquilinos — Alamedas</title>
+  <link rel="stylesheet" href="Assets/Estilos.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container">
+      <h1>Consulta de Inquilinos</h1>
+      <nav class="nav">
+        <a href="Index.htm">Inicio</a>
+        <a href="calendario.htm">Calendario</a>
+        <a href="consulta.htm" aria-current="page">Consulta de cuotas</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Formulario -->
+    <section class="card">
+      <h2>Verificar estado de cuota actual</h2>
+      <form id="frmActual" class="form" novalidate onsubmit="return consultarActual(event)">
+        <div class="grid">
+          <label>
+            DPI (13 dígitos)
+            <input type="text" id="dpi" maxlength="13" inputmode="numeric" autocomplete="off" required pattern="\\d{13}">
+          </label>
+          <label>
+            Número de Casa (ej. A-12)
+            <input type="text" id="casa" required pattern="[A-Za-z0-9-]{1,10}">
+          </label>
+          <label>
+            Primer Nombre
+            <input type="text" id="pnombre" required pattern="[A-Za-zÁÉÍÓÚáéíóúÑñ\\s]{2,}">
+          </label>
+          <label>
+            Primer Apellido
+            <input type="text" id="papellido" required pattern="[A-Za-zÁÉÍÓÚáéíóúÑñ\\s]{2,}">
+          </label>
+          <label>
+            Fecha de Nacimiento
+            <input type="date" id="fnac" required>
+          </label>
+        </div>
+        <button class="btn" type="submit">Consultar estado</button>
+        <p id="msgActual" class="muted" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+
+    <!-- Historial -->
+    <section class="card">
+      <h2>Historial de pagos</h2>
+      <form id="frmHist" class="form" novalidate onsubmit="return consultarHistorial(event)">
+        <div class="grid">
+          <label>
+            Número de Casa
+            <input type="text" id="casaHist" required pattern="[A-Za-z0-9-]{1,10}">
+          </label>
+          <label>
+            Desde (AAAA-MM)
+            <input type="month" id="desde" required>
+          </label>
+          <label>
+            Hasta (AAAA-MM)
+            <input type="month" id="hasta" required>
+          </label>
+        </div>
+        <button class="btn" type="submit">Consultar historial</button>
+      </form>
+
+      <div id="historial" class="table" style="margin-top:12px;"></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container"><small>© 2025 Alamedas de Santa Ana</small></div>
+  </footer>
+
+  <!-- Conexion SQLite y App.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/sql-wasm.js" defer></script>
+  <script src="Assets/App.js" defer></script>
+
+  <script defer>
+    // ===== Helpers de UI y fechas =====
+    function pad2(n){ return String(n).padStart(2,'0'); }
+    function yyyymm(date){ return date.getFullYear() + '-' + pad2(date.getMonth()+1); }
+
+    function sanitize(s){ return String(s ?? '').trim(); }
+    function showMsg(el, text, tipo='info'){
+      el.className = tipo==='ok' ? 'badge ok' : (tipo==='warn' ? 'badge warn' : 'muted');
+      el.textContent = text;
+    }
+
+    function validarNacimiento(fnac){
+      if(!fnac) return false;
+      const d = new Date(fnac + 'T00:00:00'); 
+      const hoy = new Date();
+      return d instanceof Date && !isNaN(d) && d <= hoy && d.getFullYear() >= 1900;
+    }
+
+    // ===== Consulta "al día" (mes/año actual) =====
+    function consultarActual(ev){
+      ev.preventDefault();
+      const dpi = sanitize(document.getElementById('dpi').value);
+      const casa = sanitize(document.getElementById('casa').value);
+      const pnombre = sanitize(document.getElementById('pnombre').value).toLowerCase();
+      const papellido = sanitize(document.getElementById('papellido').value).toLowerCase();
+      const fnac = sanitize(document.getElementById('fnac').value);
+      const msg = document.getElementById('msgActual');
+
+      // Validaciones de formulario con expresiones regulares
+      if(!/^\d{13}$/.test(dpi)){ showMsg(msg, 'DPI inválido. Debe tener 13 dígitos.', 'warn'); return false; }
+      if(!/^[A-Za-z0-9-]{1,10}$/.test(casa)){ showMsg(msg, 'Número de casa inválido. Usa letras/números/guion.', 'warn'); return false; }
+      if(!/^[A-Za-zÁÉÍÓÚáéíóúÑñ\s]{2,}$/.test(pnombre)){ showMsg(msg, 'Primer nombre inválido.', 'warn'); return false; }
+      if(!/^[A-Za-zÁÉÍÓÚáéíóúÑñ\s]{2,}$/.test(papellido)){ showMsg(msg, 'Primer apellido inválido.', 'warn'); return false; }
+      if(!validarNacimiento(fnac)){ showMsg(msg, 'Fecha de nacimiento inválida.', 'warn'); return false; }
+
+      // Buscamos inquilino que coincida con TODOS los datos ingresados
+      const rows = SQLApp.query(`
+        SELECT DPI, PrimerNombre, PrimerApellido, FechaNacimiento, NumeroCasa
+        FROM Inquilino WHERE DPI = ? AND NumeroCasa = ?
+      `, [dpi, casa]);
+
+      if(!rows.length){
+        showMsg(msg, 'No se encontró un inquilino con DPI y Número de Casa proporcionados.', 'warn');
+        return false;
+      }
+
+      const inq = rows[0];
+      const okNombre = String(inq.PrimerNombre||'').trim().toLowerCase() === pnombre;
+      const okApellido = String(inq.PrimerApellido||'').trim().toLowerCase() === papellido;
+      const okFnac = String(inq.FechaNacimiento||'').slice(0,10) === fnac;
+
+      if(!(okNombre && okApellido && okFnac)){
+        showMsg(msg, 'Los datos no coinciden con el registro del inquilino.', 'warn');
+        return false;
+      }
+
+      // Verificar pago del mes/año actual
+      const hoy = new Date();
+      const anio = hoy.getFullYear();
+      const mes = hoy.getMonth() + 1;
+
+      const pago = SQLApp.query(`
+        SELECT 1 FROM PagoDeCuotas
+        WHERE NumeroCasa = ? AND Anio = ? AND Mes = ?
+        LIMIT 1
+      `, [inq.NumeroCasa, anio, mes]);
+
+      if(pago.length){
+        showMsg(msg, 'Cuota de mantenimiento al día', 'ok');
+      }else{
+        showMsg(msg, 'Cuota de mantenimiento pendiente', 'warn');
+      }
+      return false;
+    }
+
+    // ===== Historial =====
+    function consultarHistorial(ev){
+      ev.preventDefault();
+      const casa = sanitize(document.getElementById('casaHist').value);
+      const desde = sanitize(document.getElementById('desde').value); // YYYY-MM
+      const hasta = sanitize(document.getElementById('hasta').value); // YYYY-MM
+      const out = document.getElementById('historial');
+
+      if(!/^[A-Za-z0-9-]{1,10}$/.test(casa)){
+        out.innerHTML = '<p class="muted">Número de casa inválido.</p>'; return false;
+      }
+      if(!/^\d{4}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}$/.test(hasta)){
+        out.innerHTML = '<p class="muted">Debes seleccionar ambos meses (desde y hasta).</p>'; return false;
+      }
+      if(desde > hasta){
+        out.innerHTML = '<p class="muted">El mes inicial no puede ser mayor que el final.</p>'; return false;
+      }
+
+      // Expandir rango YYYY-MM a lista (anios/meses), luego consultar pagos por cada uno
+      const [y1,m1] = desde.split('-').map(Number);
+      const [y2,m2] = hasta.split('-').map(Number);
+      const rangos = [];
+      let y = y1, m = m1;
+      while(y < y2 || (y === y2 && m <= m2)){
+        rangos.push({Anio: y, Mes: m});
+        m++; if(m > 12){ m = 1; y++; }
+      }
+
+      // Traer pagos existentes para ese rango de una sola vez
+      const pagos = SQLApp.query(`
+        SELECT Anio, Mes, FechaPago
+        FROM PagoDeCuotas
+        WHERE NumeroCasa = ?
+          AND (Anio > ? OR (Anio = ? AND Mes >= ?))
+          AND (Anio < ? OR (Anio = ? AND Mes <= ?))
+        ORDER BY Anio ASC, Mes ASC
+      `, [casa, y1, y1, m1, y2, y2, m2]);
+
+      // Mapear pagos por clave "A-M"
+      const key = (a,m)=> `${a}-${m}`;
+      const pagMap = new Map(pagos.map(p => [key(p.Anio, p.Mes), p.FechaPago]));
+
+      // Render
+      out.innerHTML = `
+        <div class="table-row table-head">
+          <div>Periodo</div><div>Estado</div><div>Fecha de pago</div>
+        </div>
+        ${rangos.map(r => {
+          const pago = pagMap.get(key(r.Anio, r.Mes));
+          const estado = pago ? 'Pagado' : 'Pendiente';
+          return `
+            <div class="table-row">
+              <div>${r.Anio}-${pad2(r.Mes)}</div>
+              <div>${estado}</div>
+              <div>${pago ? pago : '-'}</div>
+            </div>
+          `;
+        }).join('')}
+      `;
+      return false;
+    }
+  </script>
+</body>
+</html>
